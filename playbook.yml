@@ -1,0 +1,6 @@
+- name: Deploy CPU Optimized Dune Awakening Server
+  hosts: dune_server
+  become: true
+  roles:
+    - docker
+    - dune_server
