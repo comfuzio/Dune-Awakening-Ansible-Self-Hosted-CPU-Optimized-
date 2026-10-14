@@ -1,0 +1,45 @@
+- name: Ensure Dune Awakening base directory exists
+  file:
+    path: "{{ dune_install_dir }}"
+    state: directory
+    owner: root
+    group: root
+    mode: '0755'
+
+- name: Create required persistent subdirectories
+  file:
+    path: "{{ dune_install_dir }}/{{ item }}"
+    state: directory
+    mode: '0777'
+  with_items:
+    - data
+    - config
+    - logs
+
+- name: Template Dockerfile (Ubuntu 26.04 amd64v3)
+  template:
+    src: Dockerfile.j2
+    dest: "{{ dune_install_dir }}/Dockerfile"
+
+- name: Template Container Startup Script
+  template:
+    src: start.sh.j2
+    dest: "{{ dune_install_dir }}/start.sh"
+    mode: '0755'
+
+- name: Template docker-compose.yml
+  template:
+    src: docker-compose.yml.j2
+    dest: "{{ dune_install_dir }}/docker-compose.yml"
+
+- name: Template .env file
+  template:
+    src: .env.j2
+    dest: "{{ dune_install_dir }}/.env"
+
+- name: Build and Start CPU Optimized Dune Server via Docker Compose
+  command: docker compose up -d --build
+  args:
+    chdir: "{{ dune_install_dir }}"
+  register: compose_output
+  changed_when: "'Started' in compose_output.stdout or 'Created' in compose_output.stdout"
