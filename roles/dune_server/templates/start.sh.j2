@@ -1,0 +1,17 @@
+#!/bin/bash
+DUNE_APP_ID="4754530" 
+
+echo "Updating Dune: Awakening Server via SteamCMD..."
+/home/dune/steamcmd/steamcmd.sh +force_install_dir /home/dune/server +login anonymous +app_update $DUNE_APP_ID validate +quit
+
+echo "Starting Dune: Awakening Server (CPU Optimized x86-64-v3)..."
+cd /home/dune/server
+
+# Standard Unreal Engine Server Launch parameters
+./DuneServer.sh \
+  -ServerName="$SERVER_NAME" \
+  -Port=$SERVER_PORT \
+  -QueryPort=$QUERY_PORT \
+  -MaxPlayers=$MAX_PLAYERS \
+  -RconPassword="$RCON_PASSWORD" \
+  -log
