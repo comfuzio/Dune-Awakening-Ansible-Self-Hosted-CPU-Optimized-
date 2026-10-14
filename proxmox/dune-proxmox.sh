@@ -13,7 +13,7 @@ green() { printf '\033[32m%s\033[0m\n' "$*"; }
 yellow() { printf '\033[33m%s\033[0m\n' "$*"; }
 
 need_root_and_pve() {
-  [[ \${EUID:-$(id -u)} -eq 0 ]] || { red "Run as root on a Proxmox VE node."; exit 1; }
+  [[ ${EUID:-$(id -u)} -eq 0 ]] || { red "Run as root on a Proxmox VE node."; exit 1; }
   command -v qm >/dev/null || { red "qm not found; this must run on a Proxmox VE node."; exit 1; }
   command -v pvesm >/dev/null || { red "pvesm not found."; exit 1; }
   command -v curl >/dev/null || { red "curl is required."; exit 1; }
@@ -21,10 +21,10 @@ need_root_and_pve() {
 }
 
 ask() {
-  local __var="$1" __prompt="$2" __default="\${3:-}" __value
+  local __var="$1" __prompt="$2" __default="${3:-}" __value
   if [[ -n "$__default" ]]; then
     read -r -p "$__prompt [$__default]: " __value
-    __value="\${__value:-$__default}"
+    __value="${__value:-$__default}"
   else
     read -r -p "$__prompt: " __value
   fi
@@ -65,8 +65,8 @@ check_v3_cpu() {
     [[ " $flags " == *" $f "* ]] || missing+=("$f")
   done
   [[ " $flags " == *" lzcnt "* || " $flags " == *" abm "* ]] || missing+=("lzcnt/abm")
-  if ( \${#missing[@]} ); then
-    red "Host CPU is missing checked x86-64-v3 flags: \${missing[*]}"
+  if (( ${#missing[@]} )); then
+    red "Host CPU is missing checked x86-64-v3 flags: ${missing[*]}"
     red "Check CPU/BIOS support before creating an amd64v3 template."
     return 1
   fi
@@ -93,7 +93,7 @@ create_ubuntu_template() {
   yellow "Downloading Canonical Ubuntu 26.04 amd64v3 cloud image and SHA256SUMS."
   curl --fail --location --retry 3 --output "$image_dir/SHA256SUMS" "$UBUNTU_BASE_URL/SHA256SUMS"
   curl --fail --location --retry 3 --output "$image" "$UBUNTU_BASE_URL/$UBUNTU_IMAGE"
-  checksum_line="$(grep -E "[[:space:]]\\*?\${UBUNTU_IMAGE//./\\.}$" "$image_dir/SHA256SUMS" | head -n1 || true)"
+  checksum_line="$(grep -E "[[:space:]]\\*?${UBUNTU_IMAGE//./\\.}$" "$image_dir/SHA256SUMS" | head -n1 || true)"
   [[ -n "$checksum_line" ]] || { red "Image not found in official SHA256SUMS; aborting."; exit 1; }
   (cd "$image_dir" && printf '%s\n' "$checksum_line" | sha256sum --check --status) || {
     red "Image checksum verification failed; not importing."; exit 1;
