@@ -93,7 +93,7 @@ create_ubuntu_template() {
   yellow "Downloading Canonical Ubuntu 26.04 amd64v3 cloud image and SHA256SUMS."
   curl --fail --location --retry 3 --output "$image_dir/SHA256SUMS" "$UBUNTU_BASE_URL/SHA256SUMS"
   curl --fail --location --retry 3 --output "$image" "$UBUNTU_BASE_URL/$UBUNTU_IMAGE"
-  checksum_line="$(grep -E "[[:space:]]\\*?${UBUNTU_IMAGE//./\\.}$" "$image_dir/SHA256SUMS" | head -n1 || true)"
+  checksum_line="$(grep -F "$UBUNTU_IMAGE" "$image_dir/SHA256SUMS" | head -n1 || true)"
   [[ -n "$checksum_line" ]] || { red "Image not found in official SHA256SUMS; aborting."; exit 1; }
   (cd "$image_dir" && printf '%s\n' "$checksum_line" | sha256sum --check --status) || {
     red "Image checksum verification failed; not importing."; exit 1;
