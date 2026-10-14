@@ -1,0 +1,14 @@
+services:
+  dune-server:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: dune_awakening_optimized
+    network_mode: "host"
+    restart: unless-stopped
+    env_file:
+      - .env
+    volumes:
+      - ./data:/home/dune/server/Saved
+      - ./config:/home/dune/server/Config
+      - ./logs:/home/dune/server/Logs
