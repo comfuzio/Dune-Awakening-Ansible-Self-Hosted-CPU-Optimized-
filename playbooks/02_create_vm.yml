@@ -61,7 +61,6 @@
 
   vars:
     dune_user: "dune"
-    dune_user_password: "dune"
     vm_dns: "1.1.1.1 1.0.0.1"
     minimum_cpu_cores: 4
     minimum_disk_gb: 100
