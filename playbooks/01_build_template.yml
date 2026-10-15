@@ -53,7 +53,7 @@
         executable: /bin/bash
       changed_when: false
 
-    - name: Download Canonical SHA256SUMS for Ubuntu 26.04
+    - name: Download Canonical SHA256SUMS
       ansible.builtin.get_url:
         url: "{{ ubuntu_sha256s_url }}"
         dest: "{{ ubuntu_sha256s_path }}"
@@ -65,11 +65,10 @@
         dest: "{{ ubuntu_cloud_image_path }}"
         mode: "0644"
 
-    - name: Verify Ubuntu image against Canonical SHA256SUMS
+    - name: Verify image checksum against Canonical SHA256SUMS
       ansible.builtin.shell: |
-        grep -F 'ubuntu-26.04-server-cloudimg-amd64v3.img' '{{ ubuntu_sha256s_path }}' | sed 's#  *#  #'
         cd "$(dirname '{{ ubuntu_cloud_image_path }}')"
-        grep -F 'ubuntu-26.04-server-cloudimg-amd64v3.img' '{{ ubuntu_sha256s_path }}' | sed 's#  *#  #' | sha256sum --check -
+        grep -F 'ubuntu-26.04-server-cloudimg-amd64v3.img' '{{ ubuntu_sha256s_path }}' | sha256sum --check -
       args:
         executable: /bin/bash
       changed_when: false
