@@ -39,7 +39,7 @@
 
     - name: self_host_token
       prompt: "Self-host service token"
-      private: false
+      private: true
 
   tasks:
     - name: Select final player-facing IP
@@ -59,7 +59,7 @@
         ansible_user: dune
         ansible_ssh_private_key_file: "{{ lookup('env', 'DUNE_SSH_PRIVATE_KEY_PATH') | default('~/.ssh/id_ed25519', true) }}"
         ansible_python_interpreter: /usr/bin/python3
-        ansible_ssh_common_args: '-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null'
+        ansible_ssh_common_args: '-o StrictHostKeyChecking=accept-new'
 
         vm_ip: "{{ vm_ip }}"
         world_name: "{{ world_name }}"

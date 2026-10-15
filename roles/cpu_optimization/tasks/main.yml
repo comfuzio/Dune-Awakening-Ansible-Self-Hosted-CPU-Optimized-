@@ -1,0 +1,10 @@
+---
+- name: Copy x86-64-v3 compatibility checker to the Proxmox host
+  ansible.builtin.copy:
+    src: "{{ role_path }}/../../scripts/check_x86_64_v3.sh"
+    dest: /tmp/dune-check-x86_64-v3.sh
+    mode: "0755"
+
+- name: Validate Proxmox host CPU supports x86-64-v3
+  ansible.builtin.command: /tmp/dune-check-x86_64-v3.sh
+  changed_when: false
