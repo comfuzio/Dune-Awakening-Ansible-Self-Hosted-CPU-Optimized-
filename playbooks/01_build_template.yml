@@ -8,17 +8,14 @@
       prompt: "Template VMID"
       private: false
       default: "200"
-
     - name: template_name
       prompt: "Template name"
       private: false
       default: "ubuntu-2604-amd64v3-cloudinit"
-
     - name: proxmox_storage
       prompt: "Proxmox storage for template disk"
       private: false
       default: "local-lvm"
-
     - name: proxmox_bridge
       prompt: "Proxmox bridge"
       private: false
@@ -42,24 +39,14 @@
         msg: "VMID {{ template_vmid }} already exists. Choose an unused VMID."
       when: template_status.rc == 0
 
-    - name: Check that the host CPU exposes the full x86-64-v3 feature set
-      ansible.builtin.shell: |
-        flags="$(awk -F: '/^flags[[:space:]]*:/ {print $2; exit}' /proc/cpuinfo)"
-        # Linux reports SSE3 as pni on x86; LZCNT may appear as abm.
-        required="cx16 lahf_lm popcnt pni ssse3 sse4_1 sse4_2 avx avx2 bmi1 bmi2 f16c fma movbe xsave"
-        for flag in $required; do
-          case " $flags " in
-            *" $flag "*) ;;
-            *) echo "Missing x86-64-v3 CPU flag: $flag" >&2; exit 1 ;;
-          esac
-        done
-        case " $flags " in
-          *" lzcnt "*) ;;
-          *" abm "*) ;;
-          *) echo "Missing x86-64-v3 CPU flag: lzcnt/abm" >&2; exit 1 ;;
-        esac
-      args:
-        executable: /bin/bash
+    - name: Copy CPU compatibility checker to the Proxmox host
+      ansible.builtin.copy:
+        src: "{{ playbook_dir }}/../scripts/check_x86_64_v3.sh"
+        dest: /tmp/dune-check-x86_64-v3.sh
+        mode: "0755"
+
+    - name: Validate host CPU supports x86-64-v3
+      ansible.builtin.command: /tmp/dune-check-x86_64-v3.sh
       changed_when: false
 
     - name: Download Canonical SHA256SUMS
