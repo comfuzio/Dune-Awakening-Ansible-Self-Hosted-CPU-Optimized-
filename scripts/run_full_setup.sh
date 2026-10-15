@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 set -euo pipefail
+umask 077
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
@@ -8,21 +9,15 @@ find_ansible_playbook() {
     printf '%s\n' "$ANSIBLE_PLAYBOOK"
     return 0
   fi
-
   if [[ -x "$ROOT_DIR/.venv/bin/ansible-playbook" ]]; then
     printf '%s\n' "$ROOT_DIR/.venv/bin/ansible-playbook"
     return 0
   fi
-
   command -v ansible-playbook || true
 }
 
 prompt_default() {
-  local var_name="$1"
-  local prompt_text="$2"
-  local default_value="${3:-}"
-  local reply
-
+  local var_name="$1" prompt_text="$2" default_value="${3:-}" reply
   if [[ -n "$default_value" ]]; then
     read -r -p "$prompt_text [$default_value]: " reply
     printf -v "$var_name" '%s' "${reply:-$default_value}"
@@ -38,11 +33,7 @@ prompt_default() {
 }
 
 prompt_optional() {
-  local var_name="$1"
-  local prompt_text="$2"
-  local default_value="${3:-}"
-  local reply
-
+  local var_name="$1" prompt_text="$2" default_value="${3:-}" reply
   read -r -p "$prompt_text${default_value:+ [$default_value]}: " reply
   if [[ -n "$reply" ]]; then
     printf -v "$var_name" '%s' "$reply"
@@ -52,10 +43,7 @@ prompt_optional() {
 }
 
 prompt_secret() {
-  local var_name="$1"
-  local prompt_text="$2"
-  local reply
-
+  local var_name="$1" prompt_text="$2" reply
   while true; do
     read -r -s -p "$prompt_text: " reply
     printf '\n'
@@ -79,15 +67,12 @@ if [[ -z "$ANSIBLE_BIN" ]]; then
 fi
 
 prompt_default INVENTORY_PATH "Inventory file path" "$ROOT_DIR/inventory/inventory.ini"
+[[ -f "$INVENTORY_PATH" ]] || { echo "Inventory file not found: $INVENTORY_PATH" >&2; exit 1; }
 
-if [[ ! -f "$INVENTORY_PATH" ]]; then
-  echo "Inventory file not found: $INVENTORY_PATH" >&2
-  exit 1
-fi
-
-prompt_default SSH_PRIVATE_KEY_PATH "SSH private key path for the Dune VM (dedicated Dune-specific key recommended)" "${DUNE_SSH_PRIVATE_KEY_PATH:-$HOME/.ssh/id_ed25519}"
-prompt_default SSH_PUBLIC_KEY_PATH "SSH public key path for VM creation (should match the private key above)" "${DUNE_SSH_PUBLIC_KEY_PATH:-$HOME/.ssh/id_ed25519.pub}"
-
+prompt_default SSH_PRIVATE_KEY_PATH "SSH private key path for the Dune VM" "${DUNE_SSH_PRIVATE_KEY_PATH:-$HOME/.ssh/id_ed25519}"
+prompt_default SSH_PUBLIC_KEY_PATH "SSH public key path matching the private key" "${DUNE_SSH_PUBLIC_KEY_PATH:-$HOME/.ssh/id_ed25519.pub}"
+[[ -r "$SSH_PRIVATE_KEY_PATH" ]] || { echo "Private key is not readable: $SSH_PRIVATE_KEY_PATH" >&2; exit 1; }
+[[ -r "$SSH_PUBLIC_KEY_PATH" ]] || { echo "Public key is not readable: $SSH_PUBLIC_KEY_PATH" >&2; exit 1; }
 export DUNE_SSH_PRIVATE_KEY_PATH="$SSH_PRIVATE_KEY_PATH"
 export DUNE_SSH_PUBLIC_KEY_PATH="$SSH_PUBLIC_KEY_PATH"
 
@@ -114,9 +99,16 @@ prompt_default VM_IP "Dune VM IP address" "${VM_IP_CIDR%%/*}"
 prompt_optional DUNE_PACKAGE_SOURCE "Linux package source URL or local archive path (blank for SteamCMD)" ""
 prompt_default STEAM_APP_ID "Dune self-host server Steam app ID" "4754530"
 prompt_optional PLAYER_IP_OVERRIDE "Player-facing IP override (blank to auto-detect)" ""
-prompt_default WORLD_NAME "World/server name" ""
+prompt_default WORLD_NAME "World/server name" "My Dune World"
 prompt_default WORLD_REGION_CHOICE "World region: 1=Asia, 2=Europe, 3=North America, 4=Oceania, 5=South America" "3"
 prompt_secret SELF_HOST_TOKEN "Self-host service token"
+
+# Keep the token out of Ansible's command-line arguments. Ansible receives a
+# mode-0600 temporary vars file; remove it on normal exit and on signals.
+SECRET_VARS_FILE="$(mktemp "${TMPDIR:-/tmp}/dune-ansible-secrets.XXXXXX")"
+trap 'rm -f "$SECRET_VARS_FILE"' EXIT HUP INT TERM
+printf '%s' "$SELF_HOST_TOKEN" | python3 -c 'import json,sys; print(json.dumps({"self_host_token": sys.stdin.read()}))' > "$SECRET_VARS_FILE"
+unset SELF_HOST_TOKEN
 
 COMMON_ARGS=(
   -e "template_vmid=$TEMPLATE_VMID"
@@ -137,7 +129,6 @@ COMMON_ARGS=(
   -e "player_ip_override=$PLAYER_IP_OVERRIDE"
   -e "world_name=$WORLD_NAME"
   -e "world_region_choice=$WORLD_REGION_CHOICE"
-  -e "self_host_token=$SELF_HOST_TOKEN"
 )
 
 if [[ "$CREATE_TEMPLATE" == "yes" ]]; then
@@ -149,7 +140,7 @@ run_playbook "$ROOT_DIR/playbooks/04_install_steamcmd.yml" "${COMMON_ARGS[@]}"
 run_playbook "$ROOT_DIR/playbooks/05_install_dune_server.yml" "${COMMON_ARGS[@]}"
 run_playbook "$ROOT_DIR/playbooks/06_install_k3s.yml" "${COMMON_ARGS[@]}"
 run_playbook "$ROOT_DIR/playbooks/07_bootstrap_kubernetes.yml" "${COMMON_ARGS[@]}"
-run_playbook "$ROOT_DIR/playbooks/10_run_vendor_setup.yml" "${COMMON_ARGS[@]}"
+run_playbook "$ROOT_DIR/playbooks/10_run_vendor_setup.yml" "${COMMON_ARGS[@]}" -e "@$SECRET_VARS_FILE"
 
 echo
 echo "Setup completed."
