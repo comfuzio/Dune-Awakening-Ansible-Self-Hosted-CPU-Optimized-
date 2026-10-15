@@ -2,9 +2,9 @@
 
 An Ansible-based deployment workflow for running the Linux dedicated server for **Dune: Awakening** on an Ubuntu VM hosted by Proxmox VE.
 
-This project aims to use more modern cpu architectures, updated to use Canonical's **Ubuntu Server 26.04 LTS amd64v3 cloud image** instead of legacy Ubuntu. It creates a Proxmox VM, bootstraps Ubuntu, installs SteamCMD and the Linux server payload, configures k3s and the Funcom components, and initializes a self-hosted world.
+This project takes a performance-first approach: use a modern Ubuntu Server 26.04 LTS amd64v3 userspace, expose the host CPU features to the guest, avoid unnecessary virtualization overhead, and configure sensible VM resources. The goal is to give Funcom's server packages the best practical platform we can provide from the host side. Further application-level optimization remains the responsibility of Funcom and cannot be supplied by changing the guest OS alone.
 
-> **Performance note:** amd64v3 is an x86-64 CPU feature level, not a performance guarantee. The host CPU must support the required instructions. The guest VM is configured with Proxmox CPU type `host`, and the selected cloud image is the amd64v3 build. Real-world performance depends on the server workload, CPU, storage and network.
+> **Important CPU distinction:** Funcom's published self-hosting requirements call for AVX2; they do not state that the server package requires the complete x86-64-v3 feature level. x86-64-v3 includes AVX2 plus additional CPU features. The amd64v3 image is a deliberate platform choice, not evidence that Funcom's binaries were compiled for v3 and not a promise of a particular performance gain. Benefits depend on which components are optimized for the available instructions and on the workload. Measure performance on your own hardware rather than assuming a speedup.
 
 ## Choose your template
 
@@ -155,7 +155,7 @@ The successful end state should show a healthy battlegroup and the core maps run
 
 - Do not commit self-host tokens, SSH private keys, passwords, or real inventory details.
 - Review firewall exposure carefully; do not expose SSH publicly unless necessary and secured.
-- The wrapper uses SSH host-key checking settings from the upstream workflow for unattended bootstrap. Understand the security trade-off before using it outside a trusted lab.
+- The bootstrap configures SSH access for automation; review its host-key verification behavior before running it outside a trusted lab.
 - The automation has not been validated against every Proxmox version or every host CPU. Test it in a non-production environment before relying on it.
 - This project installs the Linux dedicated-server deployment; it does **not** import Funcom's official server VHDX.
 
@@ -163,6 +163,6 @@ The successful end state should show a healthy battlegroup and the core maps run
 
 For the separate approach that runs Funcom's official virtual disk directly on Proxmox, see [Comfuzio's Dune: Awakening Proxmox self-hosting guide](https://github.com/comfuzio/dune-awakening-proxmox-self-hosting). That guide is a reference and is not part of this Ubuntu-based installation workflow.
 
-## Upstream method
+## Implementation and licensing
 
-This project adapts the Ansible-based method and server setup sequence documented by [IEquilibriumI/dune-selfhost-ansible](https://github.com/IEquilibriumI/dune-selfhost-ansible). Refer to that repository for upstream context and implementation history; see [UPSTREAM.md](UPSTREAM.md) for attribution and licensing notes.
+This repository is maintained by Comfuzio. The deployment code in the current branch includes adapted implementation material, so its existing attribution and licensing obligations must be resolved before those notices can responsibly be removed. See [UPSTREAM.md](UPSTREAM.md). A genuinely independent replacement should be written from the public Funcom documentation and observed package behavior, with its own task structure and original implementation, rather than merely renaming or cosmetically rearranging existing code.
