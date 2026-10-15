@@ -86,6 +86,19 @@
           - ram_gb | int >= minimum_ram_gb
         fail_msg: "RAM must be at least {{ minimum_ram_gb }}GB."
 
+    - name: Check whether source template VMID exists
+      ansible.builtin.command: "qm config {{ template_vmid }}"
+      register: source_template_config
+      failed_when: false
+      changed_when: false
+
+    - name: Require an existing source template
+      ansible.builtin.assert:
+        that:
+          - source_template_config.rc == 0
+          - "'template: 1' in source_template_config.stdout"
+        fail_msg: "VMID {{ template_vmid }} must exist and be marked as a Proxmox template. Verify it is an Ubuntu 26.04 LTS amd64v3 cloud-init template before continuing."
+
     - name: Check if Dune VM already exists
       ansible.builtin.command: "qm status {{ dune_vmid }}"
       register: dune_vm_status
