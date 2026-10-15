@@ -39,7 +39,7 @@
 
     - name: self_host_token
       prompt: "Self-host service token"
-      private: false
+      private: true
 
   tasks:
     - name: Select final player-facing IP
