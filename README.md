@@ -1,80 +1,168 @@
-# Dune: Awakening — Proxmox VM Automation (Ubuntu 26.04 amd64v3)
+# Dune: Awakening — Ubuntu 26.04 amd64v3 Self-Hosted Server
 
-> **Status: infrastructure automation; validate on a test VM before production use.** This project creates Proxmox VM templates and VMs. It does not distribute Funcom game files or virtual disks.
+An Ansible-based deployment workflow for running the Linux dedicated server for **Dune: Awakening** on an Ubuntu VM hosted by Proxmox VE.
 
-This is a redesign of the earlier Docker/Ansible approach. That approach assumed SteamCMD supplied a conventional Linux server executable (`DuneServer.sh`). The official deployment method documented in [my Proxmox self-hosting guide](https://github.com/comfuzio/dune-awakening-proxmox-self-hosting) instead downloads `dune-server.vhdx`, a complete virtual disk containing the official Alpine/k3s server environment.
+This project follows the overall installation method in [IEquilibriumI/dune-selfhost-ansible](https://github.com/IEquilibriumI/dune-selfhost-ansible), updated to use Canonical's **Ubuntu Server 26.04 LTS amd64v3 cloud image** instead of Ubuntu 24.04. It creates a Proxmox VM, bootstraps Ubuntu, installs SteamCMD and the Linux server payload, configures k3s and the Funcom components, and initializes a self-hosted world.
 
-**Important compatibility point:** an Ubuntu 26.04 amd64v3 VM template is not a drop-in replacement for Funcom's VHDX. The official VHDX is already a bootable operating-system disk. There is no supported step in the documented workflow that installs that server directly into an Ubuntu guest. This repository therefore offers two honest workflows rather than pretending the Docker `DuneServer.sh` approach works:
+> **Performance note:** amd64v3 is an x86-64 CPU feature level, not a performance guarantee. The host CPU must support the required instructions. The guest VM is configured with Proxmox CPU type `host`, and the selected cloud image is the amd64v3 build. Real-world performance depends on the server workload, CPU, storage and network.
 
-1. **Ubuntu template workflow:** create or reuse a Proxmox Ubuntu 26.04 amd64v3 cloud-init template, then clone it to a VM with the requested hardware. This creates a ready Ubuntu VM, **not a Dune server**.
-2. **Official Dune workflow:** import the official Funcom VHDX into a new Proxmox VM with the hardware and disk configuration from the existing guide. This is the workflow for actually running the official server using the current packaging.
+## Choose your template
 
-## Features
+When you run the wrapper, it asks whether you already have an Ubuntu 26.04 LTS amd64v3 Proxmox template.
 
-- Interactive prompts for template ID, VM ID, Proxmox storage, bridge, VM name, and SSH public key.
-- Optional reuse of an existing Proxmox template; no duplicate template is created unless you choose that option.
-- Official Ubuntu 26.04 `amd64v3` cloud image download, SHA-256 verification against Canonical's published `SHA256SUMS`, and conversion to a Proxmox template.
-- Ubuntu clone defaults: `--cpu host`, 6 cores, 40960 MiB RAM, ballooning disabled, 110 GiB disk, virtio NIC, user-selected bridge, cloud-init DHCP, and SSH-key login.
-- Official Dune VM defaults: `--cpu host`, 6 cores, 40960 MiB RAM, ballooning disabled, virtio NIC, OVMF/EFI, `virtio-scsi-single`, official disk attached as `scsi0`, and an additional `+110G` disk resize as documented in the guide.
-- Refuses to overwrite an existing VMID. No VM deletion or destructive Docker cleanup.
+- **Reuse existing template:** answer `y` (default), then enter its VMID. The example default is `8010`. The VMID must refer to a usable Proxmox template built from Ubuntu 26.04 amd64v3 with cloud-init configured.
+- **Create a template:** answer `n`. The playbook downloads the official Canonical amd64v3 cloud image, verifies it against Canonical's published `SHA256SUMS`, imports it into Proxmox, configures cloud-init and EFI, and converts the VM into a template.
+
+The workflow then clones that template into a new Dune VM. It does not delete or overwrite an existing template or VM. Choose unused VMIDs.
+
+## What it automates
+
+1. Optionally creates an Ubuntu 26.04 LTS amd64v3 cloud-init template on Proxmox.
+2. Clones a VM from the chosen template and configures its hardware.
+3. Boots and bootstraps Ubuntu, installs prerequisites and configures the `dune` service account.
+4. Installs SteamCMD and downloads the Linux Dune server files (Steam app ID `4754530` by default).
+5. Installs/configures k3s and the required Funcom operators and images.
+6. Creates and configures the self-hosted world, waits for server readiness and prints verification commands.
+
+The wrapper asks for VM sizing, network, SSH keys, server/world settings, public IP override and the Funcom self-host token.
+
+## VM defaults
+
+| Setting | Default |
+|---|---|
+| Proxmox template VMID | Reuse existing: `8010`; create new: `200` |
+| New Dune VMID | `201` |
+| CPU cores | `6` |
+| CPU type | `host` |
+| RAM | `40 GiB` |
+| Ballooning | Disabled |
+| Disk | `110 GiB` |
+| Proxmox bridge | `vmbr0` |
+| Proxmox storage | `local-lvm` |
+| Guest network | Static IPv4/CIDR, prompted by wrapper |
+| Ubuntu image for new template | `ubuntu-26.04-server-cloudimg-amd64v3.img` |
+
+Adjust defaults when prompted to match your own Proxmox environment. Storage must support VM disks and cloud-init volumes.
 
 ## Requirements
 
-- Run the script **as root on the Proxmox VE node**. It uses `qm` and `pvesm` locally; it is not an Ansible playbook to run against the guest OS.
-- Proxmox VE with a storage target that supports VM disk images and cloud-init volumes.
-- A network bridge such as `vmbr0` already configured on the node.
-- Host CPU support for x86-64-v3 for the amd64v3 template; the script checks key CPU flags exposed by the host before creating it. The guest will inherit host CPU features via `cpu: host`.
-- `curl` and `sha256sum` for the Ubuntu template workflow.
-- For the official Dune workflow, either an existing `dune-server.vhdx` file or SteamCMD already installed on the Proxmox node. SteamCMD installation is deliberately not performed automatically because it may require changing host APT repositories and enabling i386 packages.
+### Proxmox VE
 
-## Run it
+- Reachable Proxmox node with permission to create, clone, configure, start and import VM disks.
+- Storage with sufficient free space for the template and a Dune VM disk of at least 110 GiB.
+- A configured bridge (for example `vmbr0`).
+- A host CPU that supports the x86-64-v3 instruction set if you create/use the amd64v3 template.
+- If you reuse a template, ensure it is Ubuntu 26.04 LTS amd64v3 and has working cloud-init.
 
-Copy the repository to the Proxmox node, then:
+### Ansible controller
+
+The controller may be a Linux workstation, WSL Ubuntu or another Linux host that can SSH to Proxmox and the new guest.
+
+Install:
+
+- `git`
+- `bash`
+- `ssh`
+- `python3`
+- `python3-venv`
+- `ansible`
+
+Create or choose an SSH key pair. The public key is injected into the VM by cloud-init; the matching private key is used by Ansible to connect to the guest. A dedicated key pair for this server is recommended.
+
+### Network and game setup
+
+- Reserve a static LAN IP for the VM and know the subnet CIDR and gateway.
+- Ensure the guest can reach the internet.
+- Configure router/firewall forwarding if players outside your LAN need to connect.
+- The default ports documented by this workflow are UDP `7777-7890` and TCP `31982`. Verify current requirements before exposing the server.
+- Obtain a valid self-host token from Funcom. The wrapper prompts for it as a secret; do not commit it to the repository or paste it into public logs.
+
+## Quick start
+
+On a Linux or WSL Ubuntu controller:
 
 ```bash
-chmod +x proxmox/dune-proxmox.sh
-./proxmox/dune-proxmox.sh
+sudo apt update
+sudo apt install -y git python3 python3-venv openssh-client
+git clone https://github.com/comfuzio/Dune-Awakening-Ansible-Self-Hosted-CPU-Optimized-.git
+cd Dune-Awakening-Ansible-Self-Hosted-CPU-Optimized-
+python3 -m venv .venv
+. .venv/bin/activate
+pip install --upgrade pip
+pip install ansible
+ssh-keygen -t ed25519 -f ~/.ssh/dune_vm_ed25519
 ```
 
-Choose one of the menu options:
+Edit `inventory/inventory.ini` with your Proxmox host address and SSH user:
 
-### 1. Create Ubuntu 26.04 amd64v3 template
+```ini
+[proxmox]
+pve ansible_host=YOUR_PROXMOX_IP ansible_user=YOUR_PROXMOX_USER
+```
 
-The script asks for the new template VMID, name, storage ID, and bridge. It downloads the official cloud image from Canonical, verifies its checksum, imports it, configures cloud-init and EFI, expands the template disk to 32 GiB, then converts the VM into a template.
+Run the wrapper:
 
-### 2. Clone an existing template
+```bash
+chmod +x scripts/run_full_setup.sh
+./scripts/run_full_setup.sh
+```
 
-Provide the template VMID and the new VMID. The source must already be marked as a Proxmox template. The script asks for the destination storage, bridge, name, SSH **public** key file, and cloud-init IP setting (default `ip=dhcp`). It clones and configures the VM with:
+When prompted, use the dedicated key paths if you created the example key:
 
-- CPU type: `host`
-- vCPU cores: `6`
-- Memory: `40960` MiB (40 GiB)
-- Ballooning: disabled (`0`)
-- Disk: `110G` total virtual disk size
-- Network: `virtio` on the selected bridge
-- Boot: SCSI 0, `virtio-scsi-single`
+- Private key: `~/.ssh/dune_vm_ed25519`
+- Public key: `~/.ssh/dune_vm_ed25519.pub`
 
-If the existing template's disk is already larger than 110 GiB, Proxmox will not shrink it; the script's resize command only grows disks. Use a template with a disk smaller than 110 GiB if you require that exact size.
+The wrapper's default key paths are `~/.ssh/id_ed25519` and `~/.ssh/id_ed25519.pub`; enter the paths you actually use.
 
-### 3. Create a VM from the official Dune VHDX
+## Existing template example
 
-Provide the VHDX path, or leave it blank to download through an already-installed SteamCMD. The script imports the disk and attaches it as **SCSI 0**, adds an EFI disk, uses `cpu: host`, 6 cores, 40 GiB RAM, disabled ballooning, and a selected virtio bridge. It then grows the disk by `+110G`, matching the existing guide's instruction (this is **not** a total disk size of 110 GiB).
+If you already have the right template at VMID `8010`:
 
-After boot, follow the [official VHDX/Proxmox guide](https://github.com/comfuzio/dune-awakening-proxmox-self-hosting) for guest networking, initial setup, battlegroup initialization, and port forwarding. The VM's guest network may need DHCP or static-IP configuration from inside Alpine.
+1. Start `./scripts/run_full_setup.sh`.
+2. Answer `y` to reuse an existing Ubuntu 26.04 LTS amd64v3 template.
+3. Enter `8010` when asked for the template VMID.
+4. Provide an unused VMID for the new Dune VM, then configure its name, storage, bridge, CPU, RAM, disk, IP, gateway, keys and world details.
 
-## About amd64v3 and performance
+The wrapper skips template creation and proceeds to clone from the supplied template. It does not inspect the image's internal build provenance, so verify that your existing template really is Ubuntu 26.04 amd64v3 with cloud-init before using it.
 
-The amd64v3 Ubuntu image is a real Canonical image, not a standard image with `CFLAGS` set. It can optimize compatible Ubuntu userland components compiled for that ISA level. It does **not** automatically recompile arbitrary game binaries, and it does not change the operating system inside Funcom's Alpine VHDX. The official Dune route uses `cpu: host` to expose supported host CPU features to the guest, but whether that improves the game's performance must be measured rather than assumed.
+## Manual playbook order
 
-## Safety and limitations
+The supported full workflow is the wrapper. If running playbooks manually, the intended order is:
 
-- Review the prompts before confirming any VM creation.
-- The script never removes an existing VM, template, disk, or storage volume.
-- Use unique VMIDs and verify the chosen storage and bridge.
-- The Ubuntu VM option is a general-purpose Ubuntu VM. Do not treat it as a working Dune installation.
-- The official VHDX option requires SteamCMD or a VHDX you obtained yourself, and requires the guest setup steps in the guide.
-- The script has not been executed against your Proxmox cluster from this environment; test on a non-production VM first.
+1. `playbooks/01_build_template.yml` — only when creating a new template.
+2. `playbooks/02_create_vm.yml`
+3. `playbooks/03_bootstrap_vm.yml`
+4. `playbooks/04_install_steamcmd.yml`
+5. `playbooks/05_install_dune_server.yml`
+6. `playbooks/06_install_k3s.yml`
+7. `playbooks/07_bootstrap_kubernetes.yml`
+8. `playbooks/10_run_vendor_setup.yml`
 
-## Related project
+Optional helper playbooks are `08_run_dune_setup.yml` and `09_customize_world_template.yml`.
 
-- [Dune Awakening Proxmox self-hosting guide](https://github.com/comfuzio/dune-awakening-proxmox-self-hosting)
+## Validation after setup
+
+On the Dune VM:
+
+```bash
+kubectl get pods -A
+/home/dune/.dune/download/scripts/battlegroup.sh status
+```
+
+The successful end state should show a healthy battlegroup and the core maps running. Use the individual map and pod states to diagnose startup issues.
+
+## Security and operational notes
+
+- Do not commit self-host tokens, SSH private keys, passwords, or real inventory details.
+- Review firewall exposure carefully; do not expose SSH publicly unless necessary and secured.
+- The wrapper uses SSH host-key checking settings from the upstream workflow for unattended bootstrap. Understand the security trade-off before using it outside a trusted lab.
+- The automation has not been validated against every Proxmox version or every host CPU. Test it in a non-production environment before relying on it.
+- This project installs the Linux dedicated-server deployment; it does **not** import Funcom's official server VHDX.
+
+## Alternative: official Funcom VM on Proxmox
+
+For the separate approach that runs Funcom's official virtual disk directly on Proxmox, see [Comfuzio's Dune: Awakening Proxmox self-hosting guide](https://github.com/comfuzio/dune-awakening-proxmox-self-hosting). That guide is a reference and is not part of this Ubuntu-based installation workflow.
+
+## Upstream method
+
+This project adapts the Ansible-based method and server setup sequence documented by [IEquilibriumI/dune-selfhost-ansible](https://github.com/IEquilibriumI/dune-selfhost-ansible). Refer to that repository for upstream context and implementation history.
