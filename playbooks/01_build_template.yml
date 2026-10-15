@@ -98,11 +98,6 @@
         qm set {{ template_vmid }}
         --scsi0 {{ proxmox_storage }}:vm-{{ template_vmid }}-disk-0
 
-    - name: Add EFI disk
-      ansible.builtin.command: >
-        qm set {{ template_vmid }}
-        --efidisk0 {{ proxmox_storage }}:0,efitype=4m,pre-enrolled-keys=0
-
     - name: Add cloud-init drive
       ansible.builtin.command: >
         qm set {{ template_vmid }}
