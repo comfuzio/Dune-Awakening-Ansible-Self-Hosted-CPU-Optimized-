@@ -2,7 +2,7 @@
 
 An Ansible-based deployment workflow for running the Linux dedicated server for **Dune: Awakening** on an Ubuntu VM hosted by Proxmox VE.
 
-This project follows the overall installation method in [IEquilibriumI/dune-selfhost-ansible](https://github.com/IEquilibriumI/dune-selfhost-ansible), updated to use Canonical's **Ubuntu Server 26.04 LTS amd64v3 cloud image** instead of Ubuntu 24.04. It creates a Proxmox VM, bootstraps Ubuntu, installs SteamCMD and the Linux server payload, configures k3s and the Funcom components, and initializes a self-hosted world.
+This project aims to use more modern cpu architectures, updated to use Canonical's **Ubuntu Server 26.04 LTS amd64v3 cloud image** instead of legacy Ubuntu. It creates a Proxmox VM, bootstraps Ubuntu, installs SteamCMD and the Linux server payload, configures k3s and the Funcom components, and initializes a self-hosted world.
 
 > **Performance note:** amd64v3 is an x86-64 CPU feature level, not a performance guarantee. The host CPU must support the required instructions. The guest VM is configured with Proxmox CPU type `host`, and the selected cloud image is the amd64v3 build. Real-world performance depends on the server workload, CPU, storage and network.
 
