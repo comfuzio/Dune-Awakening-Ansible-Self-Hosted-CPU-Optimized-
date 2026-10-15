@@ -1,0 +1,119 @@
+---
+- name: Build Ubuntu 26.04 amd64v3 cloud-init template on Proxmox
+  hosts: proxmox
+  gather_facts: false
+
+  vars_prompt:
+    - name: template_vmid
+      prompt: "Template VMID"
+      private: false
+      default: "200"
+
+    - name: template_name
+      prompt: "Template name"
+      private: false
+      default: "ubuntu-2604-amd64v3-cloudinit"
+
+    - name: proxmox_storage
+      prompt: "Proxmox storage for template disk"
+      private: false
+      default: "local-lvm"
+
+    - name: proxmox_bridge
+      prompt: "Proxmox bridge"
+      private: false
+      default: "vmbr0"
+
+  vars:
+    ubuntu_cloud_image_url: "https://cloud-images.ubuntu.com/releases/server/26.04/release/ubuntu-26.04-server-cloudimg-amd64v3.img"
+    ubuntu_cloud_image_path: "/var/lib/vz/template/iso/ubuntu-26.04-server-cloudimg-amd64v3.img"
+    ubuntu_sha256s_url: "https://cloud-images.ubuntu.com/releases/server/26.04/release/SHA256SUMS"
+    ubuntu_sha256s_path: "/var/lib/vz/template/iso/ubuntu-26.04-server-cloudimg-amd64v3.SHA256SUMS"
+
+  tasks:
+    - name: Check if template VM already exists
+      ansible.builtin.command: "qm status {{ template_vmid }}"
+      register: template_status
+      failed_when: false
+      changed_when: false
+
+    - name: Stop if template already exists
+      ansible.builtin.fail:
+        msg: "Template VMID {{ template_vmid }} already exists. Delete it first or choose another VMID."
+      when: template_status.rc == 0
+
+    - name: Check Proxmox host CPU supports x86-64-v3
+      ansible.builtin.shell: |
+        flags="$(awk -F: '/^flags[[:space:]]*:/ {print $2; exit}' /proc/cpuinfo)"
+        for flag in sse3 ssse3 sse4_1 sse4_2 cx16 popcnt avx avx2 bmi1 bmi2 f16c fma movbe xsave; do
+          case " $flags " in *" $flag "*) ;; *) echo "Missing CPU flag: $flag"; exit 1 ;; esac
+        done
+        case " $flags " in *" lzcnt "*) ;; *" abm "*) ;; *) echo "Missing CPU flag: lzcnt/abm"; exit 1 ;; esac
+      args:
+        executable: /bin/bash
+      changed_when: false
+
+    - name: Download Canonical SHA256SUMS
+      ansible.builtin.get_url:
+        url: "{{ ubuntu_sha256s_url }}"
+        dest: "{{ ubuntu_sha256s_path }}"
+        mode: "0644"
+
+    - name: Download Ubuntu 26.04 amd64v3 cloud image
+      ansible.builtin.get_url:
+        url: "{{ ubuntu_cloud_image_url }}"
+        dest: "{{ ubuntu_cloud_image_path }}"
+        mode: "0644"
+
+    - name: Verify image checksum against Canonical SHA256SUMS
+      ansible.builtin.shell: |
+        cd "$(dirname '{{ ubuntu_cloud_image_path }}')"
+        grep -F 'ubuntu-26.04-server-cloudimg-amd64v3.img' '{{ ubuntu_sha256s_path }}' | sha256sum --check -
+      args:
+        executable: /bin/bash
+      changed_when: false
+
+    - name: Create cloud-init VM shell
+      ansible.builtin.command: >
+        qm create {{ template_vmid }}
+        --name {{ template_name }}
+        --memory 2048
+        --cores 2
+        --cpu host
+        --bios ovmf
+        --machine q35
+        --net0 virtio,bridge={{ proxmox_bridge }}
+        --scsihw virtio-scsi-single
+        --ostype l26
+        --agent enabled=1
+
+    - name: Import Ubuntu cloud image disk
+      ansible.builtin.command: >
+        qm importdisk {{ template_vmid }}
+        {{ ubuntu_cloud_image_path }}
+        {{ proxmox_storage }}
+
+    - name: Attach imported disk
+      ansible.builtin.command: >
+        qm set {{ template_vmid }}
+        --scsi0 {{ proxmox_storage }}:vm-{{ template_vmid }}-disk-0
+
+    - name: Add cloud-init drive
+      ansible.builtin.command: >
+        qm set {{ template_vmid }}
+        --ide2 {{ proxmox_storage }}:cloudinit
+
+    - name: Set boot disk
+      ansible.builtin.command: >
+        qm set {{ template_vmid }}
+        --boot c
+        --bootdisk scsi0
+
+    - name: Enable serial console
+      ansible.builtin.command: >
+        qm set {{ template_vmid }}
+        --serial0 socket
+        --vga serial0
+
+    - name: Convert VM to template
+      ansible.builtin.command: "qm template {{ template_vmid }}"
