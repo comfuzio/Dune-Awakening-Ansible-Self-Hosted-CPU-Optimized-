@@ -1,0 +1,29 @@
+name: Static validation
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install validation tools
+        run: python -m pip install --upgrade pip ansible-core yamllint
+      - name: Check wrapper syntax
+        run: bash -n scripts/run_full_setup.sh scripts/check_x86_64_v3.sh tests/test_cpu_v3.sh
+      - name: Test x86-64-v3 feature detection
+        run: bash tests/test_cpu_v3.sh
+      - name: Lint YAML
+        run: yamllint -d relaxed playbooks inventory ansible.cfg
+      - name: Check Ansible playbook syntax
+        run: |
+          set -euo pipefail
+          for playbook in playbooks/*.yml; do
+            echo "Checking $playbook"
+            ansible-playbook --syntax-check -i inventory/inventory.ini "$playbook"
+          done
