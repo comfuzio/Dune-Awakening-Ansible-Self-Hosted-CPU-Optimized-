@@ -124,16 +124,14 @@
           - --ide2
           - "{{ proxmox_storage }}:cloudinit"
 
-    - name: Set boot disk
+    - name: Set boot order using the current Proxmox syntax
       ansible.builtin.command:
         argv:
           - qm
           - set
           - "{{ template_vmid }}"
           - --boot
-          - c
-          - --bootdisk
-          - scsi0
+          - order=scsi0
 
     - name: Enable serial console
       ansible.builtin.command:
