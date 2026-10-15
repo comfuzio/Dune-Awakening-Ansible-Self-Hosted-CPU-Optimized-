@@ -165,4 +165,4 @@ For the separate approach that runs Funcom's official virtual disk directly on P
 
 ## Upstream method
 
-This project adapts the Ansible-based method and server setup sequence documented by [IEquilibriumI/dune-selfhost-ansible](https://github.com/IEquilibriumI/dune-selfhost-ansible). Refer to that repository for upstream context and implementation history.
+This project adapts the Ansible-based method and server setup sequence documented by [IEquilibriumI/dune-selfhost-ansible](https://github.com/IEquilibriumI/dune-selfhost-ansible). Refer to that repository for upstream context and implementation history; see [UPSTREAM.md](UPSTREAM.md) for attribution and licensing notes.
