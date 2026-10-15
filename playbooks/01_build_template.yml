@@ -45,7 +45,7 @@
     - name: Check Proxmox host CPU supports x86-64-v3
       ansible.builtin.shell: |
         flags="$(awk -F: '/^flags[[:space:]]*:/ {print $2; exit}' /proc/cpuinfo)"
-        for flag in avx avx2 bmi1 bmi2 f16c fma movbe xsave; do
+        for flag in avx avx2 bmi1 bmi2 f16c fma movbe xsave popcnt; do
           case " $flags " in *" $flag "*) ;; *) echo "Missing CPU flag: $flag"; exit 1 ;; esac
         done
         case " $flags " in *" lzcnt "*) ;; *" abm "*) ;; *) echo "Missing CPU flag: lzcnt/abm"; exit 1 ;; esac
