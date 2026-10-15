@@ -1,9 +1,0 @@
-# Installation Paths
-dune_install_dir: /opt/dune-awakening
-
-# Server Configuration
-dune_server_name: "My CPU Optimized Dune Server"
-dune_server_port: 7777
-dune_query_port: 27015
-dune_max_players: 40
-dune_rcon_password: "ChangeMe123!"
