@@ -5,9 +5,9 @@
 
   vars_prompt:
     - name: template_vmid
-      prompt: "Ubuntu cloud-init template VMID"
+      prompt: "Ubuntu 26.04 amd64v3 cloud-init template VMID"
       private: false
-      default: "200"
+      default: "8010"
 
     - name: dune_vmid
       prompt: "New Dune VMID"
